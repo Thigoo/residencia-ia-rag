@@ -3,3 +3,5 @@ python-dotenv
 jupyter
 ipykernel
 docling
+requests
+langchain_text_splitters
