@@ -4,8 +4,8 @@ import os
 
 os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
-pdf_dir = Path("AULA_02/files")
-output_dir = Path("AULA_02/output")
+pdf_dir = Path("docs/files")
+output_dir = Path("docs/markdown")
 
 output_dir.mkdir(parents=True, exist_ok=True)
 
