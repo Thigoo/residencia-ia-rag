@@ -37,7 +37,7 @@ def limpar_texto(texto):
     return re.sub(r"(\w+)\s+-\s*(\w+)", r"\1\2", texto)
 
 
-def carregar_texto(pasta="AULA_02/output"):
+def carregar_texto(pasta="docs/markdown"):
     caminhos = glob.glob(os.path.join(pasta, "*.md"))
     if not caminhos:
         raise FileNotFoundError(f"Nenhum .md em {pasta}. Rode de dentro de AULA_04.")
