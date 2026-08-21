@@ -34,3 +34,23 @@
   1. _"Qual é a ordem de aperto e o torque em Nm dos parafusos do cabeçote do motor EA211 1.0?"_
   2. _"Quais são as ferramentas especiais necessárias para trocar a correia dentada do modelo X 2022?"_
   3. _"Existe algum boletim técnico ou recall ativo relacionado ao barulho na caixa de direção do veículo com código de chassi Z?"_
+
+#### 1.2 Por que RAG?
+
+- **Adequação da Solução RAG:**
+  - **Acesso a Dados Privados e Restritos:** Permite consultar manuais proprietários, manuais de reparação e boletins técnicos de montadoras sem expor esses dados para treinamento público do LLM.
+  - **Ancoragem em Fontes Confiáveis (Groundedness):** Garante que todas as instruções fornecidas ao mecânico sejam extraídas estritamente da documentação oficial cadastrada, eliminando gírias ou procedimentos não homologados.
+
+- **Conhecimento Necessário para o Modelo:**
+  - **Base Documental (RAG):** Manuais de oficina, tabelas de torques e folgas, boletins de serviço e manuais de diagnóstico.
+  - **Instruções de Comportamento (System Prompt):** Diretrizes para o modelo responder de forma direta, objetiva, usando termos técnicos do setor, indicando sempre o documento/página de origem e declarando explicitamente caso a informação não seja encontrada na base.
+
+- **Frequência de Atualização do Conhecimento:**
+  - **Mensal / Trimestral:** A base documental não muda diariamente, mas precisa incorporar novos boletins técnicos, atualizações de procedimentos das montadoras e a inclusão de manuais para novos anos/modelos lançados no mercado.
+
+- **Uso de Documentos Privados:**
+  - Sim. Depende integralmente de documentações técnicas oficiais e proprietárias de montadoras e fabricantes de autopeças.
+
+- **Risco do Conhecimento Pré-treinado do LLM (Sem RAG):**
+  - O LLM puro tende a generalizar procedimentos entre veículos semelhantes ou "inventar" números plausíveis baseados na média dos dados de treinamento.
+  - **Exemplo Concreto de Falha:** Ao perguntar o torque de aperto do cabeçote de um motor específico de 3 cilindros de alumínio, o LLM pré-treinado pode responder _"Aperte com 80 Nm em etapa única"_, misturando o procedimento de um motor antigo de ferro fundido. Se o mecânico aplicar essa força, a rosca do bloco de alumínio espana ou os parafusos rompem, causando a perda total do bloco do motor e prejuízo financeiro direto para a oficina.
