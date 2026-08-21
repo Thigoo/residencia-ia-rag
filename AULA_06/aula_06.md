@@ -67,3 +67,47 @@
 
 - **Trade-off de Arquitetura:**
   - Para esses cenários, a aplicação deve adotar uma abordagem **Híbrida / Agente** (onde o LLM decide se faz uma busca via RAG na documentação técnica OU se invoca uma API de banco de dados SQL / Leitor de Diagramas), em vez de tentar resolver tudo com busca de texto vetorial.
+
+## Parte 2 - Organização dos Documentos
+
+### 2.1 Mapeamento do Acervo Documental
+
+- **Tipos de Arquivo:**
+  - **PDFs (Predominante):** Manuais de oficina, esquemas de montagem e boletins de serviço emitidos pelas montadoras.
+  - **Planilhas (XLSX / CSV):** Tabelas de aplicação de peças, conversão de códigos de fabricantes e especificações de torque/fluidos.
+
+- **Volume Aproximado:**
+  - **Centenas de Manuais Principais:** Cerca de 300 a 500 manuais de reparação cobrindo a frota circulante.
+  - **Milhares de Boletins Técnicos:** Aprox. 2.000 a 5.000 comunicados de recalls, soluções de defeitos recorrentes e atualizações de serviço.
+
+- **Tamanho Típico por Documento:**
+  - **Manuais de Oficina completos:** 300 a 1.200 páginas (50 MB a 250 MB por arquivo).
+  - **Boletins Técnicos e TSBs (Technical Service Bulletins):** 2 a 8 páginas (1 MB a 5 MB por arquivo).
+
+- **Frequência de Atualização:**
+  - **Mensal:** Entrada de novos boletins técnicos de serviço e recalls lançados pelas montadoras.
+  - **Anual:** Substituição ou adição de novos manuais de reparação a cada lançamento de ano/modelo de veículo.
+
+---
+
+### 2.2 Estrutura de Pastas e Taxonomia
+
+```text
+documentos_oficina/
+├── montadoras/
+│   ├── volkswagen/
+│   │   ├── gol/
+│   │   │   ├── 2020-2023/
+│   │   │   │   ├── motor/
+│   │   │   │   ├── transmissao/
+│   │   │   │   ├── suspensao_e_freios/
+│   │   │   │   └── eletrica_e_eletronica/
+│   │   └── t-cross/
+│   └── fiat/
+├── boletins_tecnicos/
+│   ├── 2024/
+│   └── 2026/
+└── tabelas_referencia/
+    ├── fluidos_e_lubrificantes.xlsx
+    └── equivalencia_pecas.xlsx
+```
