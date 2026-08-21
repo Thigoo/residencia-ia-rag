@@ -111,3 +111,66 @@ documentos_oficina/
     ├── fluidos_e_lubrificantes.xlsx
     └── equivalencia_pecas.xlsx
 ```
+
+## Parte 3 - Pipeline de Ingestão e Processamento de Dados
+
+---
+
+### 3.1 Extração de Conteúdo no Cenário Automotivo
+
+- **Tratamento de PDFs Técnicos com Texto Selecionável:**
+  - Ao receber o arquivo `manual_reparacao_engine_EA211_vw.pdf` (PDF nativo digital), o parser de layout lê a árvore de objetos do documento. Ele identifica blocos de texto e preserva a leitura em colunas mantendo a hierarquia visual dos tópicos (ex: do título `1. Bloco do Motor` para o subtítulo `1.1 Torque de Cabeçote`).
+
+- **Tratamento de PDFs Digitalizados (Escaneados de Manuais Antigos):**
+  - Ao processar um boletim de um veículo ano 2005 escaneado pela oficina (`boletim_recolhimento_2005.pdf`), o pipeline converte as páginas do PDF em imagens de alta resolução (300 DPI), aplica um filtro de binarização (preto e branco) para remover marcas de gordura ou sujeira do papel e executa o motor de OCR focado em caracteres alfanuméricos para evitar a confusão de dígitos críticos (ex: não confundir a letra `O` com o número `0` no código de motor `AP 1.8`).
+
+- **Tratamento Específico de Tabelas de Especificação Técnica:**
+  - Quando o extrator encontra a _Tabela de Torques e Sequência de Apertos_ na página 42 do manual, ele **não** a converte para texto puro corrido. O pipeline extrai a estrutura de linhas e colunas e a converte para **Markdown/HTML Table**:
+    ```markdown
+    | Componente     | Parafuso  | Etapa 1 | Etapa 2   | Observação          |
+    | :------------- | :-------- | :------ | :-------- | :------------------ |
+    | Cabeçote       | M10 x 1,5 | 30 Nm   | 90° + 90° | Substituir parafuso |
+    | Cárter de Óleo | M6 x 1,0  | 10 Nm   | -         | Usar trava química  |
+    ```
+    Isso garante que, quando o modelo buscar o valor, a relação entre a linha `Cabeçote` e a coluna `Etapa 1` permaneça semanticamente amarrada.
+
+- **Tratamento de Imagens e Esquemas Elétricos/Mecânicos:**
+  - Diante de uma imagem técnica no manual (ex: `figura_12_ponto_correia.png` mostrando a marcação das engrenagens do comando de válvulas), a imagem é enviada para um modelo de visão computacional com o prompt: _"Descreva a posição das marcas de sincronismo visíveis nesta imagem de motor"_.
+  - O modelo gera o texto: _"A marcação 'A' na engrenagem do comando de admissão deve alinhar-se perfeitamente com a ranhura 'B' na tampa traseira"_. Esse texto descritivo é inserido diretamente no corpo do documento extraído logo abaixo do cabeçalho da figura.
+
+- **Caso Concreto de Problema na Extração:**
+  - **Problema Encontrado:** Na tentativa de extrair o manual da caixa de transmissão, a ferramenta de leitura leu o código da ferramenta especial `VW-309-A` como `VW` na linha superior e `-309-A` na linha inferior por conta de uma quebra automática do PDF.
+  - **Efeito no Sistema:** O mecânico pesquisava por `VW-309-A` e o sistema não encontrava nada.
+  - **Solução no Pipeline:** Implementação de uma expressão regular (RegEx) na fase pós-extração para reagrupar padrões de códigos técnicos conhecidos de montadoras antes de enviar para o próximo passo.
+
+---
+
+### 3.2 Limpeza e Normalização Prática
+
+- **O que o Script Remove do Documento:**
+  1. **Cabeçalhos de Página Repetitivos:** O script identifica e deleta linhas no topo que contêm strings padrão como `"VW Serviços e Peças - Uso Interno - Pág. XX"`.
+  2. **Rodapés com Avisos Legais Genéricos:** Remoção do bloco de texto da margem inferior: _"As informações deste manual estão sujeitas a alterações sem aviso prévio"_.
+  3. **Índice Remissivo e Sumário:** O script detecta a seção inicial do documento que lista tópicos e números de página (ex: `"1.2 Sistema de Freios ..... pág 84"`) e descarta essas páginas inteiras, pois elas fazem a busca vetorial recuperar páginas de sumário em vez da instrução técnica real.
+
+- **Padronização do Texto Extraído:**
+  - **Codificação:** Conversão forçada de caracteres para `UTF-8` para evitar bugs de acentuação (ex: transformar `cabeÃ§ote` em `cabeçote`).
+  - **Padronização de Unidades:** Expressões como `3 Kgfm`, `30Nm`, `30 N.m` e `22 lb-ft` são normalizadas ou anotadas no texto extraído para incluir o padrão universal em `30 Nm` (Newton-metro), garantindo que a busca do mecânico encontre a resposta mesmo que ele digite em outra unidade.
+
+- **Perda Crítica por Limpeza Excessiva (O que NÃO remover):**
+  - Se o script de limpeza remover linhas marcadas com asteriscos ou caixas de aviso (ex: `⚠️ ATENÇÃO: Os parafusos do cabeçote são do tipo deformável e NÃO podem ser reutilizados`), o mecânico receberá apenas o torque numérico, aplicará o parafuso velho e o motor falhará. Caixas de aviso e notas técnicas de rodapé são **preservadas obrigatoriamente**.
+
+---
+
+### 3.3 Execução da Frequência e Atualização da Base
+
+- **Como Funciona na Prática:**
+  - **Triggers de Entrada:** O pipeline não roda de forma cega em horários fixos. Ele é acionado por **evento**: assim que a equipe de engenharia da oficina faz o upload de um arquivo `TSB_2026_caixa_cambio.pdf` na pasta do sistema, o pipeline é disparado para processar exclusivamente este arquivo.
+
+- **Ciclo de Atualização e Identificação de Arquivos Modificados:**
+  1. Quando um documento chega, o script gera uma chave Hash única (**SHA-256**) baseada nos bytes do arquivo.
+  2. O sistema consulta o metadado no banco: se o Hash do arquivo `manual_gol_2022.pdf` já existir e for idêntico, o processamento é interrompido para economizar recursos.
+  3. Se a montadora lançou uma revisão do manual `manual_gol_2022_v2.pdf`, o Hash será diferente. O pipeline então realiza a substituição cirúrgica:
+     - Localiza todos os vetores no banco que possuem a tag `document_id = manual_gol_2022`.
+     - Apaga ou marca o campo desses vetores para `status = inativo`.
+     - Processa, limpa, gera os novos _chunks_ e grava os novos vetores de `manual_gol_2022_v2.pdf` com `status = ativo`.
+  - **Resultado:** A base de dados geral da oficina (com +500 manuais) continua intacta e operando; **apenas as 20 páginas alteradas daquele manual específico foram atualizadas**.
