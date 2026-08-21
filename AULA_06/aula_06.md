@@ -54,3 +54,16 @@
 - **Risco do Conhecimento Pré-treinado do LLM (Sem RAG):**
   - O LLM puro tende a generalizar procedimentos entre veículos semelhantes ou "inventar" números plausíveis baseados na média dos dados de treinamento.
   - **Exemplo Concreto de Falha:** Ao perguntar o torque de aperto do cabeçote de um motor específico de 3 cilindros de alumínio, o LLM pré-treinado pode responder _"Aperte com 80 Nm em etapa única"_, misturando o procedimento de um motor antigo de ferro fundido. Se o mecânico aplicar essa força, a rosca do bloco de alumínio espana ou os parafusos rompem, causando a perda total do bloco do motor e prejuízo financeiro direto para a oficina.
+
+#### 1.3 Limitações — Quando RAG Não é a Resposta
+
+- **Casos em que o RAG Falharia ou Seria Inadequado:**
+  1. **Consulta de Estoque e Preços em Tempo Real:**
+     Perguntas como _"Existe a peça X no estoque e qual o preço atual?"_ exigem precisão absoluta e dados transacionais em tempo real. O RAG busca contextos textuais estáticos; para essa dor, a solução correta é uma consulta direta via API a um banco de dados relacional (SQL) do ERP da oficina.
+  2. **Contagem, Agregação e Ordenação entre Múltiplos Documentos:**
+     Perguntas que exigem varrer todo o acervo para agregar dados (ex: _"Listar todos os 30 modelos que usam a mesma correia e ordenar do menor para o maior torque"_) sofrem com as limitações da busca vetorial (que recupera apenas os _k_ trechos mais relevantes, omitindo o restante) e da incapacidade do LLM de realizar ordenações e contagens numéricas complexas sem alucinar.
+  3. **Interpretação Pura de Esquemas elétricos e Diagramas Visuais:**
+     Diagramas elétricos de chicotes e fiação são representações estritamente visuais e estruturadas. Tentar converter um diagrama vetorial em texto para o RAG resulta em perda massiva de informação contextual.
+
+- **Trade-off de Arquitetura:**
+  - Para esses cenários, a aplicação deve adotar uma abordagem **Híbrida / Agente** (onde o LLM decide se faz uma busca via RAG na documentação técnica OU se invoca uma API de banco de dados SQL / Leitor de Diagramas), em vez de tentar resolver tudo com busca de texto vetorial.
