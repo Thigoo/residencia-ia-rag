@@ -259,3 +259,47 @@ Estrutura gravada na carga útil (payload) de cada vetor armazenado no Banco Vet
 `has_tables` / `has_warnings`: Indicadores booleanos que permitem destacar ou dar prioridade a trechos contendo avisos de segurança ou valores tabulados.
 
 ---
+
+## Parte 5 - Chunking e Estratégias de Splitting
+
+Nesta etapa, definimos o processo de divisão (_chunking_) dos manuais e boletins técnicos para garantir que a busca por similaridade recupere trechos precisos sem perder o contexto operacional necessário.
+
+---
+
+### 5.1 Definição da Estratégia de Chunking
+
+#### Estratégia Escolhida
+
+- **Splitter Recursivo Orientado à Estrutura Markdown/Layout:** Utilização do `RecursiveCharacterTextSplitter` configurado para respeitar os separadores em ordem hierárquica: `["\n## ", "\n### ", "\n\n", "\n", " ", ""]`.
+- **Tamanho dos Chunks:** Entre **400 e 600 tokens** (~1.500 a 2.400 caracteres). É o tamanho ideal para conter um procedimento técnico completo ou uma especificação de torque com suas ressalvas.
+- **Overlap (Sobreposição):** **10% a 15%** (~50 a 80 tokens). Garante que frases de aviso no final de um parágrafo não percam a relação com o passo seguinte do procedimento no chunk adjacente.
+- **Unidade de Divisão:** Por **seções e parágrafos**. A divisão nunca deve ocorrer no meio de palavras ou sentenças isoladas; a quebra tenta ocorrer sempre no limite de um cabeçalho ou bloco de texto completo.
+
+#### Tratamento Diferenciado por Tipo de Documento
+
+Sim, documentos de naturezas distintas **não** podem receber o mesmo tratamento:
+
+- **Manuais Técnicos (Oficina):** Requerem chunking baseado em estrutura/layout (respeitando seções, tabelas de torque e passos numerados).
+- **Contratos / Termos Legais:** Exigem chunking estritamente hierárquico por cláusulas e artigos, pois uma frase isolada sem o número da cláusula perde o valor jurídico.
+- **Transcrições de Call Center:** Exigem chunking por turnos de fala (_speaker turns_) ou janelas temporais de diálogo, já que as frases são curtas e contêm ruídos de fala.
+
+---
+
+### 5.2 Respostas às Questões Práticas
+
+#### 1. Consequências de Chunks Extremos
+
+- **Chunks Muito Pequenos (< 100 tokens):** Perdem contexto semântico. A busca pode encontrar a palavra "30 Nm", mas o vetor não conterá a informação de que esse torque se refere ao _cabeçote_ do _motor EA211_.
+- **Chunks Muito Grandes (> 1.500 tokens):** Diluem a densidade da resposta. O vetor fica superlotado de temas variados (ex: junta, cabeçote, correia dentada e bomba d'água no mesmo chunk), reduzindo a similaridade do vetor com perguntas específicas e estourando a janela de contexto da LLM na geração.
+
+#### 2. Tratamento de Tabelas e Imagens
+
+- **Tabelas:** Cortar uma tabela ao meio destrói a relação entre coluna (ex: _Componente_) e linha (ex: _Torque_). A estratégia consiste em converter tabelas de PDF para **Markdown ou HTML** e mantê-las como blocos indivisíveis. Caso a tabela exceda o tamanho limite do chunk, ela deve ser replicada com o cabeçalho das colunas presente em cada fragmento.
+- **Imagens e Diagramas:** Imagens isoladas não possuem vetor de texto. Elas devem ser processadas via OCR ou por um modelo Multimodal para gerar uma **descrição textual detalhada** (ex: _"Figura 12: Sequência de aperto dos parafusos do cabeçote em ordem cruzada de 1 a 8"_). Esse texto é armazenado no chunk e vinculado ao caminho do arquivo de imagem para exibição no frontend.
+
+#### 3. Avaliação e Evidências de Qualidade do Chunking
+
+Para provar que a escolha de chunking foi bem-sucedida, coletam-se duas evidências principais:
+
+1. **Avaliação de Retrieval (Hit Rate & MRR):** Criação de um conjunto de teste com 50 perguntas reais de mecânicos e verificação se o chunk ideal que contém a resposta correta aparece no Top-3 resultados retornados pelo banco vetorial.
+2. **Taxa de Alucinação / Respostas Incompletas:** Monitoramento da métrica de _Faithfulness_ (Fidelidade ao Contexto) do RAG. Se a LLM responder "não sei" ou errar o valor por falta de contexto no chunk recuperado, significa que a divisão cortou informações essenciais.
