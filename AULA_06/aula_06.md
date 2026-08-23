@@ -303,3 +303,61 @@ Para provar que a escolha de chunking foi bem-sucedida, coletam-se duas evidênc
 
 1. **Avaliação de Retrieval (Hit Rate & MRR):** Criação de um conjunto de teste com 50 perguntas reais de mecânicos e verificação se o chunk ideal que contém a resposta correta aparece no Top-3 resultados retornados pelo banco vetorial.
 2. **Taxa de Alucinação / Respostas Incompletas:** Monitoramento da métrica de _Faithfulness_ (Fidelidade ao Contexto) do RAG. Se a LLM responder "não sei" ou errar o valor por falta de contexto no chunk recuperado, significa que a divisão cortou informações essenciais.
+
+---
+
+## Parte 6 - Modelos de Embeddings
+
+A escolha do modelo de _embeddings_ define a precisão da representação vetorial e a eficiência da busca por similaridade semântica. Abaixo, apresentamos a comparação estruturada dos modelos selecionados para dois cenários distintos de uso.
+
+---
+
+### 6.1 Tabela Comparativa de Modelos
+
+| Item                       | Cenário A: Produção em Nuvem / Alta Acurácia (API)                           | Cenário B: On-Premise / Documentos Sigilosos (Local)          |
+| :------------------------- | :--------------------------------------------------------------------------- | :------------------------------------------------------------ |
+| **Modelo escolhido**       | `text-embedding-3-large` (OpenAI)                                            | `bge-m3` (BAAI)                                               |
+| **Dimensão do embedding**  | 3.072 (ajustável via API)                                                    | 1.024                                                         |
+| **Suporta português?**     | Sim                                                                          | Sim                                                           |
+| **É multilíngue?**         | Sim                                                                          | Sim                                                           |
+| **Tamanho máx. entrada**   | 8.191 tokens                                                                 | 8.192 tokens                                                  |
+| **É open source?**         | Não                                                                          | Sim (Licença MIT)                                             |
+| **Pode rodar localmente?** | Não                                                                          | Sim                                                           |
+| **Possui API?**            | Sim (SaaS oficial)                                                           | Sim (via Ollama, vLLM, TEI)                                   |
+| **Custo aproximado**       | ~$0,00013 / 1k tokens                                                        | Gratuito (Custo de infraestrutura/GPU)                        |
+| **Fonte da informação**    | [OpenAI Embeddings Docs](https://platform.openai.com/docs/guides/embeddings) | [BAAI BGE-M3 HuggingFace](https://huggingface.co/BAAI/bge-m3) |
+
+---
+
+### 6.2 Justificativa da Escolha dos Modelos
+
+#### Por que o `text-embedding-3-large` é adequado ao Cenário A (Nuvem / API)?
+
+Para uma aplicação em nuvem focada em alto desempenho, o `text-embedding-3-large` oferece o estado da arte em representação semântica e suporte multilíngue. Ele lida excepcionalmente bem com variações do português do Brasil e termos técnicos automotivos. Além disso, permite reduzir a dimensão do vetor (ex: de 3.072 para 1.024) sem perda significativa de performance, reduzindo custos de armazenamento e latência de busca no banco vetorial.
+
+#### Por que o `bge-m3` é adequado ao Cenário B (Local / On-Premise)?
+
+O `bge-m3` é o modelo open-source ideal para execução _on-premise_. Ele se destaca por ser **milti-function, multi-linguality e multi-granularity**, suportando buscas por densidade (denso/vetorial), esparsidade (estilo BM25/palavras-chave) e ordenação multivetorial (ColBERT). Essa capacidade híbrida nativa é perfeita para manuais de oficina, onde a busca precisa combinar compreensão semântica da dúvida do mecânico com a precisão exata de códigos de peças e códigos de falhas (DTCs).
+
+---
+
+### 6.3 Análise e Respostas às Questões Práticas
+
+#### 1. Modelos Alternativos Considerados e Descartados
+
+- **`text-embedding-ada-002` (Descartado):** Modelo de geração anterior da OpenAI. Foi descartado por possuir menor desempenho em avaliações multilíngues e custo por token mais elevado quando comparado às famílias mais recentes (`text-embedding-3-small` / `large`).
+- **`nomic-embed-text-v1.5` (Descartado para o Cenário B):** Embora seja um excelente modelo open-source com suporte a contextos longos, o `bge-m3` demonstrou superioridade técnica no suporte nativo à busca híbrida (densa + esparsa) e no processamento do português do Brasil em termos técnicos complexos.
+
+#### 2. Impacto de Documentos Sigilosos na Escolha (Local vs. API)
+
+Sim, a presença de documentos sigilosos altera fundamentalmente a arquitetura:
+
+- **Cenário de API (Nuvem):** Exige envio de dados para servidores de terceiros. Mesmo com termos de privacidade estritos, pode violar normas de conformidade (LGPD, ISO 27001) ou segredos industriais de montadoras.
+- **Cenário Local (On-Premise):** Com o modelo `bge-m3` rodando localmente (ex: via _Text Generation Inference_ ou _Ollama_ em um servidor interno), **nenhum dado ou manual sai da rede da empresa**. O pipeline de vetorização e a busca funcionam 100% _air-gapped_, garantindo sigilo absoluto das informações técnicas proprietárias.
+
+#### 3. Relação entre o Tamanho Máximo de Entrada do Modelo e o Chunking (Parte 5)
+
+A janela máxima de entrada (ex: 8.192 tokens) determina o **limite físico superior** que um chunk pode ter antes de ser truncado pelo modelo. No entanto, a decisão do chunking na Parte 5 (400 a 600 tokens) foi guiada por **densidade semântica e granularidade de busca**, não pelo limite máximo do modelo:
+
+- Se criássemos chunks com 8.192 tokens para aproveitar a janela do modelo, o vetor ficaria extremamente genérico ("diluído") e perderia a capacidade de encontrar uma especificação de torque específica.
+- O tamanho amplo do contexto do modelo (8k tokens) é útil para dar margem a estratégias avançadas, como inclusão do contexto global da seção no _prompt_ de entrada, mas o chunk recuperado deve continuar sendo pequeno e focado para responder à dúvida exata com alta precisão.
