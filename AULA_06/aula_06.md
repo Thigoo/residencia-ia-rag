@@ -174,3 +174,88 @@ documentos_oficina/
      - Apaga ou marca o campo desses vetores para `status = inativo`.
      - Processa, limpa, gera os novos _chunks_ e grava os novos vetores de `manual_gol_2022_v2.pdf` com `status = ativo`.
   - **Resultado:** A base de dados geral da oficina (com +500 manuais) continua intacta e operando; **apenas as 20 páginas alteradas daquele manual específico foram atualizadas**.
+
+## Parte 4 - Arquitetura e Governança de Metadados
+
+Os metadados desempenham papel duplo na aplicação: **filtragem de pré-busca** (garantindo a consulta apenas na documentação do veículo correto) e **rastreabilidade pós-busca** (comprovação e citação do manual oficial para o mecânico).
+
+---
+
+### 4.1 Schema de Metadados do Documento (Nível Global)
+
+Estrutura mantida em banco relacional/chave-valor para controle de ciclo de vida do arquivo.
+
+```json
+{
+  "document_id": "doc_vw_gol_2022_man_01",
+  "title": "Manual de Reparação do Motor EA211 1.0 12V",
+  "source_file": "VW_Gol_MSI_2022_Motor.pdf",
+  "document_type": "manual_reparacao",
+  "montadora": "Volkswagen",
+  "modelo": "Gol",
+  "ano_inicio": 2020,
+  "ano_fim": 2023,
+  "motorizacao": "EA211 1.0 12V Flex",
+  "sistema_veicular": "motor",
+  "created_at": "2026-01-15T10:00:00Z",
+  "updated_at": "2026-03-01T14:30:00Z",
+  "status": "ativo",
+  "versao_documento": "2.1"
+}
+```
+
+### Justificativa dos Campos Globais:
+
+`document_id`: Identificador único por hash do arquivo, essencial para deletar ou atualizar em lote todos os chunks associados quando o manual for revisado.
+
+`title / source_file`: Nome amigável e nome físico do arquivo no storage para permitir download ou consulta do PDF original.
+
+`document_type`: Diferencia manual_reparacao, boletim_tecnico (recall) e tabela_especificacao, permitindo priorização durante a busca.
+
+`montadora` / `modelo` / `ano_inicio` / `ano_fim` / `motorizacao` / `sistema_veicular`: Taxonomia automotiva oficial que delimita o escopo exato de aplicação do manual.
+
+`created_at / updated_at`: Datas para controle de auditoria do pipeline de ingestão.
+
+`status / versao_documento`: Controla se o manual está ativo ou inativo, impedindo a leitura de procedimentais ultrapassados.
+
+---
+
+### 4.2 Schema do Chunk (Nível do Vetor)
+
+Estrutura gravada na carga útil (payload) de cada vetor armazenado no Banco Vetorial. Herda atributos do documento e adiciona a localização do trecho.
+
+```json
+{
+  "chunk_id": "doc_vw_gol_2022_man_01_chk_0142",
+  "document_id": "doc_vw_gol_2022_man_01",
+  "montadora": "Volkswagen",
+  "modelo": "Gol",
+  "ano_modelo": 2022,
+  "motorizacao": "EA211 1.0 12V Flex",
+  "sistema_veicular": "motor",
+  "subsistema": "cabecote_e_valvulas",
+  "page_number": 48,
+  "section_title": "1.4 Procedimento de Aperto do Cabeçote",
+  "document_type": "manual_reparacao",
+  "status": "ativo",
+  "has_tables": true,
+  "has_warnings": true,
+  "text": "Aplicar o torque nos parafusos do cabeçote na ordem cruzada conforme Figura 12. Etapa 1: 30 Nm. Etapa 2: Ângulo de 90°. Etapa 3: Ângulo de 90°. Atenção: Substituir os parafusos a cada desmontagem."
+}
+```
+
+#### Justificativa dos Campos do Chunk:
+
+`chunk_id`: Chave primária do vetor (ID_do_doc + sequencial) para indexação no banco vetorial.
+
+`document_id`: Chave estrangeira ligando o fragmento ao seu documento pai.
+
+`montadora` / `modelo` / `ano_modelo` / `motorizacao` / `sistema_veicular`: Réplica da taxonomia pai exigida para aplicar Metadata Filtering direto no índice vetorial antes de calcular as distâncias de cosseno.
+
+`subsistema`: Detalha a área técnica (cabecote_e_valvulas, injecao_eletronica) para afunilar pesquisas de alta precisão.
+
+`page_number` / `section_title`: Número da página e cabeçalho da seção no PDF original para permitir auditoria direta pelo mecânico.
+
+`has_tables` / `has_warnings`: Indicadores booleanos que permitem destacar ou dar prioridade a trechos contendo avisos de segurança ou valores tabulados.
+
+---
